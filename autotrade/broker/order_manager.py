@@ -9,7 +9,8 @@ import os
 from broker.kis_api import KISClient
 from data.database import insert_trade
 from notify.telegram_bot import send_message
-from risk.position_sizer import calc_position_size
+from risk.position_sizer import calc_position_size, get_sizing_report
+from risk.stop_loss import StopLossManager
 
 logger = logging.getLogger(__name__)
 MAX_SLOTS = int(os.getenv("MAX_SLOTS", "5"))
@@ -66,12 +67,19 @@ class OrderManager:
         result = self.client.place_order(ticker, "BUY", quantity, price)
 
         if result.get("status") == "dry_run" or result.get("rt_cd") == "0":
+            # ATR 절대값 계산 (사이징 보고서용)
+            atr_abs = cur_price * atr_pct / 100
+            sl_mgr  = StopLossManager(
+                buy_price=cur_price, atr=atr_abs,
+                stop_pct=-0.02, take_pct=0.03,
+            )
             self.positions[ticker] = {
                 "buy_price": cur_price,
                 "quantity":  quantity,
                 "strategy":  strategy,
                 "amount":    cur_price * quantity,
                 "atr_pct":   atr_pct,
+                "sl_mgr":    sl_mgr,       # 손절 관리자
             }
             insert_trade({
                 "ticker": ticker, "side": "BUY",
@@ -134,17 +142,26 @@ class OrderManager:
     def check_stop_conditions(self,
                                stop_loss_pct: float = -0.02,
                                take_profit_pct: float = 0.03) -> list[str]:
-        """보유 종목 일괄 손절/익절 체크. 청산된 티커 목록 반환."""
+        """StopLossManager 기반 손절/익절 통합 감시. 청산된 티커 목록 반환."""
         closed = []
         for ticker, pos in list(self.positions.items()):
             try:
-                cur = self.client.get_current_price(ticker)
-                pnl_pct = (cur - pos["buy_price"]) / pos["buy_price"]
-                if pnl_pct <= stop_loss_pct:
-                    self.sell(ticker, "STOP_LOSS")
-                    closed.append(ticker)
-                elif pnl_pct >= take_profit_pct:
-                    self.sell(ticker, "TAKE_PROFIT")
+                cur    = self.client.get_current_price(ticker)
+                sl_mgr = pos.get("sl_mgr")
+                if sl_mgr:
+                    reason = sl_mgr.evaluate(cur)
+                else:
+                    # sl_mgr 없으면 고정 비율로 fallback
+                    pnl_pct = (cur - pos["buy_price"]) / pos["buy_price"]
+                    if pnl_pct <= stop_loss_pct:
+                        reason = "STOP_LOSS"
+                    elif pnl_pct >= take_profit_pct:
+                        reason = "TAKE_PROFIT"
+                    else:
+                        reason = None
+
+                if reason:
+                    self.sell(ticker, reason)
                     closed.append(ticker)
             except Exception as e:
                 logger.error(f"[OM] {ticker} 조건 체크 실패: {e}")
