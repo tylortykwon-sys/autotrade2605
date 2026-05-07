@@ -24,16 +24,15 @@ def main():
     logger.info(f"모드: {'모의투자(DRY_RUN)' if DRY_RUN else '실전투자'}")
     logger.info(f"DB: {DB_PATH}")
 
-    # Phase 1 완료 후 주석 해제
-    # from data.database import init_db
-    # init_db()
-    # logger.info("DB 초기화 완료")
+    from data.database import init_db
+    init_db()
+    logger.info("DB 초기화 완료")
 
     # Phase 5 완료 후 주석 해제
     # from scheduler.cron_manager import start_scheduler
     # start_scheduler()
 
-    logger.info("환경 셋업 완료 — Phase 1 (데이터 수집) 구현 대기 중")
+    logger.info("Phase 1 완료 — Phase 2 (전략 엔진) 구현 대기 중")
 
 
 if __name__ == "__main__":
