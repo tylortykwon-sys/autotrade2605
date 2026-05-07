@@ -28,11 +28,18 @@ def main():
     init_db()
     logger.info("DB 초기화 완료")
 
-    # Phase 5 완료 후 주석 해제
-    # from scheduler.cron_manager import start_scheduler
-    # start_scheduler()
+    from scheduler.cron_manager import start_scheduler
+    scheduler = start_scheduler()
+    logger.info("스케줄러 시작 완료 — 평일 08:30~15:35 자동 실행")
 
-    logger.info("Phase 1 완료 — Phase 2 (전략 엔진) 구현 대기 중")
+    try:
+        import time
+        while True:
+            time.sleep(60)
+    except (KeyboardInterrupt, SystemExit):
+        from scheduler.cron_manager import stop_scheduler
+        stop_scheduler(scheduler)
+        logger.info("시스템 종료")
 
 
 if __name__ == "__main__":

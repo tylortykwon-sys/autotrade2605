@@ -10,21 +10,43 @@ logger = logging.getLogger(__name__)
 
 
 def get_top_tickers(market: str = "KOSPI", top_n: int = 100) -> list[str]:
-    """거래대금 상위 N개 종목 코드 반환"""
-    today = datetime.now().strftime("%Y%m%d")
+    """
+    거래량 상위 N개 종목 코드 반환
+    1차: DB에 저장된 종목을 최근 거래량 기준으로 정렬
+    2차: DB 없으면 KOSPI 대형주 기본 목록 반환
+    """
+    from data.database import get_connection
     try:
-        df = stock.get_market_trading_value_by_ticker(today, market=market)
-        if df.empty:
-            # 당일 데이터 없으면 전 영업일 시도
-            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-            df = stock.get_market_trading_value_by_ticker(yesterday, market=market)
-        df = df.sort_values("거래대금", ascending=False)
-        tickers = df.index.tolist()[:top_n]
-        logger.info(f"[Collector] {market} 상위 {len(tickers)}종목 조회 완료")
-        return tickers
+        conn = get_connection()
+        cursor = conn.cursor()
+        # 최근 5일 평균 거래량 기준 상위 종목
+        cursor.execute("""
+            SELECT ticker, AVG(volume) as avg_vol
+            FROM market_data
+            WHERE date >= date('now', '-7 days')
+            GROUP BY ticker
+            ORDER BY avg_vol DESC
+            LIMIT ?
+        """, (top_n,))
+        tickers = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        if tickers:
+            logger.info(f"[Collector] DB 기반 상위 {len(tickers)}종목 반환")
+            return tickers
     except Exception as e:
-        logger.error(f"[Collector] 종목 목록 조회 실패: {e}")
-        return []
+        logger.error(f"[Collector] DB 종목 조회 실패: {e}")
+
+    # fallback — KOSPI/KOSDAQ 대형주 고정 목록
+    FALLBACK = [
+        "005930", "000660", "035420", "005380", "051910",
+        "006400", "028260", "003550", "066570", "105560",
+        "032830", "055550", "096770", "034730", "018260",
+        "011200", "000270", "207940", "068270", "035720",
+        "323410", "003490", "316140", "015760", "010950",
+        "009150", "033780", "030200", "086790", "017670",
+    ]
+    logger.info(f"[Collector] fallback 목록 {len(FALLBACK[:top_n])}종목 반환")
+    return FALLBACK[:top_n]
 
 
 def fetch_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
