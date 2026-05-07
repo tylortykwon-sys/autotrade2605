@@ -8,7 +8,7 @@ import os
 
 from broker.kis_api import KISClient
 from data.database import insert_trade
-from notify.telegram_bot import send_message
+from notify.telegram_bot import send_buy_alert, send_sell_alert, send_message
 from risk.position_sizer import calc_position_size, get_sizing_report
 from risk.stop_loss import StopLossManager
 
@@ -87,12 +87,7 @@ class OrderManager:
                 "amount": cur_price * quantity,
                 "strategy": strategy, "pnl": 0, "pnl_pct": 0,
             })
-            send_message(
-                f"<b>매수 체결</b>\n"
-                f"종목: {ticker}\n수량: {quantity}주\n"
-                f"단가: {cur_price:,.0f}원\n전략: {strategy}\n"
-                f"투자: {cur_price * quantity:,.0f}원"
-            )
+            send_buy_alert(ticker, quantity, cur_price, strategy, cur_price * quantity)
             logger.info(f"[OM] 매수 완료: {ticker} {quantity}주 @ {cur_price:,.0f}원")
             return True
 
@@ -126,13 +121,7 @@ class OrderManager:
             "pnl": round(pnl), "pnl_pct": round(pnl_pct, 2),
         })
 
-        emoji = "+" if pnl >= 0 else "-"
-        send_message(
-            f"<b>매도 체결</b> [{reason}]\n"
-            f"종목: {ticker}\n수량: {pos['quantity']}주\n"
-            f"단가: {cur_price:,.0f}원\n"
-            f"손익: {pnl:+,.0f}원 ({emoji}{abs(pnl_pct):.2f}%)"
-        )
+        send_sell_alert(ticker, pos["quantity"], cur_price, pnl, pnl_pct, reason)
         logger.info(f"[OM] 매도 완료: {ticker} {pnl:+,.0f}원 ({pnl_pct:+.2f}%) [{reason}]")
         del self.positions[ticker]
         return True

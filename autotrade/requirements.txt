@@ -21,6 +21,7 @@ APScheduler==3.10.4
 
 # 대시보드 (선택)
 streamlit==1.35.0
+streamlit-autorefresh==1.0.1
 
 # 유틸
 pytz==2024.1

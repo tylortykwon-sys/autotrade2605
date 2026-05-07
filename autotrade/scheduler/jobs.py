@@ -5,7 +5,6 @@
 import logging
 from datetime import datetime
 
-from ai.analyzer import analyze_today_trades
 from ai.sentiment import get_market_sentiment_score
 from broker.order_manager import OrderManager
 from data.collector import fetch_all_top
@@ -13,7 +12,8 @@ from data.dart_client import get_recent_disclosures
 from data.database import save_portfolio_snapshot
 from data.news_client import get_market_sentiment_news
 from notify.report_builder import build_daily_report
-from notify.telegram_bot import send_message
+from notify.telegram_bot import (send_circuit_breaker_alert, send_daily_report,
+                                  send_message, send_sentiment_alert, send_system_alert)
 from risk.circuit_breaker import CircuitBreaker
 from strategy.larry_williams import LarryWilliamsStrategy, get_candidate_tickers
 from strategy.scoring import get_buy_candidates
@@ -49,7 +49,7 @@ def job_morning_prep():
     try:
         score = get_market_sentiment_score()
         logger.info(f"[Job] 시장 감성 점수: {score}")
-        send_message(f"오늘 공시 {len(_disclosures)}건\n시장 감성: {score:.0f}/100")
+        send_sentiment_alert(score["score"], score["label"], score["reason"])
     except Exception as e:
         logger.error(f"[Job] 감성 분석 오류: {e}")
 
@@ -223,9 +223,8 @@ def job_daily_report():
     """일일 손익 보고서 생성 + AI 분석 + 텔레그램 발송"""
     logger.info("[Job] 15:35 — 일일 보고서 생성")
     try:
-        report  = build_daily_report()
-        ai_note = analyze_today_trades()
-        send_message(f"{report}\n\nAI: {ai_note}")
+        report = build_daily_report()   # AI 코멘트 포함
+        send_daily_report(report)
     except Exception as e:
         logger.error(f"[Job] 보고서 생성 오류: {e}")
 
