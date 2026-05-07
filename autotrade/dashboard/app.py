@@ -250,6 +250,70 @@ def render_recent_trades(trades_df: pd.DataFrame):
     st.dataframe(display, use_container_width=True, hide_index=True)
 
 
+def render_learning_status():
+    """Phase 9: 피드백 루프 / 전략 상태"""
+    st.subheader("🧠 자기학습 상태")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**일시정지 전략**")
+        try:
+            from learning.param_updater import get_paused_strategies
+            paused = get_paused_strategies()
+            if not paused:
+                st.success("일시정지 전략 없음")
+            else:
+                for p in paused:
+                    st.warning(
+                        f"🛑 **{p['strategy']}**\n"
+                        f"사유: {p['reason']}\n"
+                        f"해제일: {p['paused_until']}  (누적 {p.get('fail_count',1)}회)"
+                    )
+        except Exception as e:
+            st.error(f"상태 읽기 실패: {e}")
+
+    with col2:
+        st.markdown("**주간 성과 요약 (최근 7일)**")
+        try:
+            from learning.feedback_loop import analyze_recent_performance
+            result = analyze_recent_performance(days=7)
+            stats  = result["stats"]
+            if not stats:
+                st.info("최근 7일 거래 없음")
+            else:
+                rows = []
+                for name, v in stats.items():
+                    flag = "⚠️" if name in result["underperformers"] else ("🚨" if name in result["critical"] else "✅")
+                    rows.append({
+                        "전략": f"{flag} {name}",
+                        "거래수": v["trades"],
+                        "승률(%)": f"{v['win_rate']*100:.0f}%",
+                        "총손익": f"{v['total_pnl']:+,.0f}원",
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.error(f"성과 분석 실패: {e}")
+
+    st.divider()
+    st.markdown("**strategy_params DB 현황**")
+    try:
+        from data.database import get_connection
+        conn = get_connection()
+        df_sp = pd.read_sql_query(
+            "SELECT strategy, COUNT(*) as 종목수, ROUND(AVG(sharpe),2) as avg_sharpe "
+            "FROM strategy_params GROUP BY strategy ORDER BY avg_sharpe DESC LIMIT 15",
+            conn
+        )
+        conn.close()
+        if df_sp.empty:
+            st.info("최적화 데이터 없음")
+        else:
+            st.dataframe(df_sp, use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.error(f"DB 조회 실패: {e}")
+
+
 def render_system_status():
     st.subheader("⚙️ 시스템 상태")
 
@@ -306,7 +370,7 @@ def main():
     stats_df     = load_strategy_stats()
 
     # 탭 구성
-    tab1, tab2, tab3, tab4 = st.tabs(["오늘 현황", "전략 성과", "손익 추이", "시스템"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["오늘 현황", "전략 성과", "손익 추이", "자기학습", "시스템"])
 
     with tab1:
         render_portfolio_summary(trades_df)
@@ -322,6 +386,9 @@ def main():
         render_pnl_chart(snapshots_df, trades_df)
 
     with tab4:
+        render_learning_status()
+
+    with tab5:
         render_system_status()
 
 

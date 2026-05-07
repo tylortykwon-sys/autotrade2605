@@ -19,6 +19,7 @@ from scheduler.jobs import (
     job_save_daily,
     job_scoring_buy,
     job_set_lw_triggers,
+    job_weekly_feedback,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,13 @@ def start_scheduler() -> BackgroundScheduler:
         job_monthly_optimize,
         CronTrigger(day=1, hour=23, minute=0, timezone=KST),
         id="monthly_opt", name="월 1일 23:00 최적화",
+    )
+
+    # 주간 피드백 루프 (매주 월요일 08:00)
+    scheduler.add_job(
+        job_weekly_feedback,
+        CronTrigger(day_of_week="mon", hour=8, minute=0, timezone=KST),
+        id="weekly_feedback", name="월요일 08:00 주간 피드백",
     )
 
     scheduler.start()

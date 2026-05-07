@@ -242,3 +242,34 @@ def job_monthly_optimize():
     except Exception as e:
         logger.error(f"[Job] 월간 최적화 오류: {e}")
         send_message(f"월간 최적화 오류: {e}")
+
+
+# ── 08:00 (매주 월요일) ───────────────────────────────────────
+def job_weekly_feedback():
+    """주간 피드백 루프: 성과 분석 → 파라미터 자동 업데이트 → 알림"""
+    logger.info("[Job] 주간 피드백 루프 시작")
+    try:
+        from learning.feedback_loop import analyze_recent_performance, generate_feedback_report
+        from learning.param_updater import apply_feedback, get_status_summary
+
+        feedback = analyze_recent_performance(days=7)
+        result   = apply_feedback(feedback)
+        report   = generate_feedback_report(days=7)
+
+        # 파라미터 업데이트 결과 요약 추가
+        summary_lines = [report, ""]
+        if result["newly_paused"]:
+            summary_lines.append(f"🛑 일시정지: {', '.join(result['newly_paused'])}")
+        if result["freed_pauses"]:
+            summary_lines.append(f"✅ 정지 해제: {', '.join(result['freed_pauses'])}")
+        if result["opt_updated"] > 0:
+            summary_lines.append(f"🔧 파라미터 갱신: {result['opt_updated']}건")
+        paused_status = get_status_summary()
+        if paused_status != "일시정지 전략 없음":
+            summary_lines.append(paused_status)
+
+        send_message("\n".join(summary_lines))
+        logger.info(f"[Job] 주간 피드백 완료: {result}")
+    except Exception as e:
+        logger.error(f"[Job] 주간 피드백 오류: {e}")
+        send_system_alert(f"주간 피드백 오류: {e}", level="ERROR")
