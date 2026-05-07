@@ -1,0 +1,26 @@
+# 데이터 수집
+pykrx==1.0.47
+requests==2.31.0
+pandas==2.2.0
+numpy==1.26.4
+
+# 기술적 지표
+ta==0.11.0
+
+# 환경변수
+python-dotenv==1.0.0
+
+# AI
+anthropic==0.40.0
+
+# 텔레그램
+python-telegram-bot==21.3
+
+# 스케줄러
+APScheduler==3.10.4
+
+# 대시보드 (선택)
+streamlit==1.35.0
+
+# 유틸
+pytz==2024.1
